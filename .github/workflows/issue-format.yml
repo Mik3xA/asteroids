@@ -1,0 +1,107 @@
+name: Format & Label Issues
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  format-and-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Format issue and add labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { issue } = context.payload;
+            const { owner, repo } = context.repo;
+
+            // Keyword to label mapping
+            const labelMap = {
+              bug: ['bug', 'error', 'crash', 'fail', 'broken', 'not working', 'issue', 'problem'],
+              enhancement: ['feature', 'enhancement', 'request', 'add', 'implement', 'new', 'improve'],
+              documentation: ['doc', 'documentation', 'readme', 'comment', 'typo'],
+              question: ['question', 'help', 'how to', 'how do', 'support'],
+              performance: ['performance', 'slow', 'optimize', 'speed', 'lag', 'memory'],
+              security: ['security', 'vulnerability', 'exploit', 'xss', 'csrf', 'injection'],
+              good_first_issue: ['good first issue', 'beginner', 'easy', 'starter'],
+              duplicate: ['duplicate', 'already reported', 'same issue'],
+              wontfix: ['wontfix', 'wont fix', 'not a bug', 'by design', 'expected behavior']
+            };
+
+            // Detect labels from title and body
+            const text = `${issue.title} ${issue.body || ''}`.toLowerCase();
+            const detectedLabels = [];
+
+            for (const [label, keywords] of Object.entries(labelMap)) {
+              if (keywords.some(kw => text.includes(kw))) {
+                detectedLabels.push(label);
+              }
+            }
+
+            // Default label if none detected
+            if (detectedLabels.length === 0) {
+              detectedLabels.push('needs-triage');
+            }
+
+            // Add labels to issue
+            if (detectedLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issue.number,
+                labels: detectedLabels
+              });
+            }
+
+            // Format issue body with template
+            const originalBody = issue.body || '';
+            
+            // Get repo metadata
+            const { data: repoData } = await github.rest.repos.get({ owner, repo });
+            const defaultBranch = repoData.default_branch;
+            const { data: commitData } = await github.rest.repos.getCommit({
+              owner,
+              repo,
+              ref: defaultBranch
+            });
+            const latestCommit = commitData.sha.substring(0, 7);
+
+            const formattedBody = `## Description
+${originalBody}
+
+## Steps to Reproduce
+<!-- Please add steps to reproduce the issue -->
+1. 
+2. 
+3. 
+
+## Expected Behavior
+<!-- What should happen? -->
+
+## Actual Behavior
+<!-- What actually happens? -->
+
+## Environment
+- **OS**: 
+- **Browser/Node version**: 
+- **Commit**: ${latestCommit}
+- **Branch**: ${defaultBranch}
+- **Repository**: ${repoData.html_url}
+
+---
+*This issue was automatically formatted by the issue-format workflow.*`;
+
+            // Update issue body
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: formattedBody
+            });
