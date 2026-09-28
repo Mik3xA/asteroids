@@ -22,7 +22,6 @@ jobs:
             const { issue } = context.payload;
             const { owner, repo } = context.repo;
 
-            // Keyword to label mapping
             const labelMap = {
               bug: ['bug', 'error', 'crash', 'fail', 'broken', 'not working', 'issue', 'problem'],
               enhancement: ['feature', 'enhancement', 'request', 'add', 'implement', 'new', 'improve'],
@@ -35,7 +34,6 @@ jobs:
               wontfix: ['wontfix', 'wont fix', 'not a bug', 'by design', 'expected behavior']
             };
 
-            // Detect labels from title and body
             const text = `${issue.title} ${issue.body || ''}`.toLowerCase();
             const detectedLabels = [];
 
@@ -45,12 +43,10 @@ jobs:
               }
             }
 
-            // Default label if none detected
             if (detectedLabels.length === 0) {
               detectedLabels.push('needs-triage');
             }
 
-            // Add labels to issue
             if (detectedLabels.length > 0) {
               await github.rest.issues.addLabels({
                 owner,
@@ -60,10 +56,7 @@ jobs:
               });
             }
 
-            // Format issue body with template
             const originalBody = issue.body || '';
-            
-            // Get repo metadata
             const { data: repoData } = await github.rest.repos.get({ owner, repo });
             const defaultBranch = repoData.default_branch;
             const { data: commitData } = await github.rest.repos.getCommit({
@@ -73,32 +66,33 @@ jobs:
             });
             const latestCommit = commitData.sha.substring(0, 7);
 
-            const formattedBody = `## Description
-${originalBody}
+            const formattedBody = [
+              "## Description",
+              originalBody,
+              "",
+              "## Steps to Reproduce",
+              "<!-- Please add steps to reproduce the issue -->",
+              "1. ",
+              "2. ",
+              "3. ",
+              "",
+              "## Expected Behavior",
+              "<!-- What should happen? -->",
+              "",
+              "## Actual Behavior",
+              "<!-- What actually happens? -->",
+              "",
+              "## Environment",
+              "- **OS**: ",
+              "- **Browser/Node version**: ",
+              `- **Commit**: ${latestCommit}`,
+              `- **Branch**: ${defaultBranch}`,
+              `- **Repository**: ${repoData.html_url}`,
+              "",
+              "---",
+              "*This issue was automatically formatted by the issue-format workflow.*"
+            ].join('\n');
 
-## Steps to Reproduce
-<!-- Please add steps to reproduce the issue -->
-1. 
-2. 
-3. 
-
-## Expected Behavior
-<!-- What should happen? -->
-
-## Actual Behavior
-<!-- What actually happens? -->
-
-## Environment
-- **OS**: 
-- **Browser/Node version**: 
-- **Commit**: ${latestCommit}
-- **Branch**: ${defaultBranch}
-- **Repository**: ${repoData.html_url}
-
----
-*This issue was automatically formatted by the issue-format workflow.*`;
-
-            // Update issue body
             await github.rest.issues.update({
               owner,
               repo,
